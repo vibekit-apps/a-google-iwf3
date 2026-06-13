@@ -22,34 +22,17 @@ app.get('/api/geocode', async (req, res) => {
   }
 });
 
-// Truck routing via Valhalla public instance (no key required)
+// Truck routing via OSRM public instance (no key required)
+// Note: OSRM driving profile is used — no truck-specific restrictions on public instance
 app.post('/api/route', async (req, res) => {
   try {
-    const { start, end, restrictions } = req.body;
-    // Valhalla expects [lon, lat]
-    const body = {
-      locations: [
-        { lon: start[0], lat: start[1] },
-        { lon: end[0],   lat: end[1] }
-      ],
-      costing: 'truck',
-      costing_options: {
-        truck: {
-          width:     restrictions.width     || 2.5,
-          height:    restrictions.height    || 4.3,
-          length:    restrictions.length    || 19.0,
-          weight:    restrictions.weight    || 40.0,
-          axle_load: restrictions.axleload  || 9.5
-        }
-      },
-      directions_options: { units: 'kilometres', language: 'en-AU' }
-    };
+    const { start, end } = req.body;
+    // OSRM expects lon,lat in URL: /route/v1/driving/lon1,lat1;lon2,lat2
+    const coords = `${start[0]},${start[1]};${end[0]},${end[1]}`;
+    const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=true&annotations=false`;
 
-    const url = 'https://valhalla.openstreetmap.de/route';
     const vRes = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      headers: { 'User-Agent': 'WATruckNavigator/1.0 (vibekit.bot)' }
     });
 
     if (!vRes.ok) {
