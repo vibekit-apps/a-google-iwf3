@@ -322,15 +322,6 @@ setupGeocode('from-input', 'from-suggestions', c => fromCoords = c, '#00d4aa');
 setupGeocode('to-input',   'to-suggestions',   c => toCoords = c,   '#e94560');
 
 // ---- Routing ----
-// Valhalla maneuver type -> readable label
-const MANEUVER = {
-  0:'Depart',1:'Straight',2:'Slight right',3:'Right',4:'Sharp right',
-  5:'U-turn right',6:'U-turn left',7:'Sharp left',8:'Left',9:'Slight left',
-  10:'Merge',11:'Go via ramp',12:'Off ramp',13:'Fork',14:'Stay',15:'Stay',
-  16:'Continue',17:'Merge',18:'Roundabout',19:'Roundabout exit',
-  20:'Ferry',21:'Ferry exit',22:'Transit',23:'Transit in',24:'Transit out',
-  25:'Transit remain',26:'Destination'
-};
 
 async function getRoute() {
   if (!fromCoords || !toCoords) {
@@ -358,22 +349,22 @@ async function getRoute() {
     });
     const data = await res.json();
 
-    if (data.error || !data.trip) {
-      const msg = data.error ? JSON.parse(data.error)?.error?.message || data.error : 'No route found.';
+    if (data.error || data.code !== 'Ok' || !data.routes || !data.routes.length) {
+      const msg = data.error || 'No route found.';
       setInfo('No route found: ' + msg);
       btn.disabled = false; btn.textContent = 'Find Route';
       return;
     }
 
-    // Decode shape
-    const shape = decodePolyline(data.trip.legs[0].shape, 6);
+    // OSRM returns GeoJSON geometry: coordinates are [lon, lat]
+    const route = data.routes[0];
+    const coords = route.geometry.coordinates.map(c => [c[1], c[0]]); // flip to [lat, lon] for Leaflet
     if (routeLayer) map.removeLayer(routeLayer);
-    routeLayer = L.polyline(shape, { color: '#e94560', weight: 5, opacity: 0.85 }).addTo(map);
+    routeLayer = L.polyline(coords, { color: '#e94560', weight: 5, opacity: 0.85 }).addTo(map);
     map.fitBounds(routeLayer.getBounds(), { padding: [30,30] });
 
-    const summary = data.trip.summary;
-    const dist = summary.length.toFixed(1);
-    const dur  = formatDuration(summary.time);
+    const dist = (route.distance / 1000).toFixed(1);
+    const dur  = formatDuration(route.duration);
 
     const routeType = document.getElementById('route-type').value;
     const routeLabel = {
@@ -384,13 +375,16 @@ async function getRoute() {
 
     setInfo(`<span class="stat">${dist} km</span> &nbsp; <span class="stat">${dur}</span> &nbsp; ${routeLabel} | ${restrictions.width}m W / ${restrictions.height}m H / ${restrictions.length}m L / ${restrictions.weight}t`);
 
-    // Steps
-    const maneuvers = data.trip.legs[0].maneuvers || [];
-    if (maneuvers.length) {
+    // Steps — OSRM format
+    const steps = (route.legs[0] && route.legs[0].steps) || [];
+    if (steps.length) {
       const list = document.getElementById('steps-list');
-      list.innerHTML = maneuvers.map(m =>
-        `<div class="step">${MANEUVER[m.type] || 'Continue'}: <span>${m.instruction}</span> — ${m.length.toFixed(2)} km</div>`
-      ).join('');
+      list.innerHTML = steps.map(s => {
+        const type = s.maneuver ? (s.maneuver.modifier ? s.maneuver.type + ' ' + s.maneuver.modifier : s.maneuver.type) : 'continue';
+        const name = s.name || '';
+        const km = (s.distance / 1000).toFixed(2);
+        return `<div class="step">${type}: <span>${name}</span> — ${km} km</div>`;
+      }).join('');
       document.getElementById('steps-panel').style.display = 'block';
     }
 
@@ -411,24 +405,7 @@ function formatDuration(s) {
   return h > 0 ? `${h}h ${m}m` : `${m} min`;
 }
 
-// Valhalla encoded polyline (precision 6)
-function decodePolyline(str, precision) {
-  let index = 0, lat = 0, lng = 0;
-  const coordinates = [];
-  const factor = Math.pow(10, precision || 5);
-  while (index < str.length) {
-    let b, shift = 0, result = 0;
-    do { b = str.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
-    const dlat = (result & 1) ? ~(result >> 1) : result >> 1;
-    lat += dlat;
-    shift = 0; result = 0;
-    do { b = str.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
-    const dlng = (result & 1) ? ~(result >> 1) : result >> 1;
-    lng += dlng;
-    coordinates.push([lat / factor, lng / factor]);
-  }
-  return coordinates;
-}
+
 </script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 # STATUS.md — Live Infrastructure (auto-updated)
-_Last updated: 2026-06-13T14:43:53.405Z_
+_Last updated: 2026-06-13T14:57:15.732Z_
 
 ## Container
 - **Name**: vk-a-google-iwf3
@@ -12,9 +12,9 @@ _Last updated: 2026-06-13T14:43:53.405Z_
 ## App
 - **Name**: a-google-iwf3
 - **Subdomain**: a-google-iwf3.vibekit.bot
-- **DB Status**: error
-- **Health Failures**: 1
-- **Last Healthy**: 2026-06-13T14:12:08.252+00:00
+- **DB Status**: running
+- **Health Failures**: 0
+- **Last Healthy**: 2026-06-13T14:56:38.344+00:00
 
 
 ## Host
