@@ -7,63 +7,14 @@ const PORT = process.env.PORT || 4070;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Proxy ORS routing to avoid CORS + keep API key server-side
-app.post('/api/route', async (req, res) => {
-  try {
-    const { start, end, profile, restrictions } = req.body;
-    // Use ORS free HGV profile
-    const orsProfile = 'driving-hgv';
-    const body = {
-      coordinates: [start, end],
-      profile: orsProfile,
-      format: 'geojson',
-      options: {
-        vehicle_type: 'hgv',
-        profile_params: {
-          restrictions: {
-            width: restrictions.width || 2.5,
-            height: restrictions.height || 4.0,
-            length: restrictions.length || 19.0,
-            axleload: restrictions.axleload || 9.5,
-            weight: restrictions.weight || 40.0
-          }
-        }
-      },
-      instructions: true,
-      language: 'en'
-    };
-
-    const apiKey = process.env.ORS_API_KEY || '';
-    const url = `https://api.openrouteservice.org/v2/directions/${orsProfile}/geojson`;
-
-    const orsRes = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': apiKey
-      },
-      body: JSON.stringify(body)
-    });
-
-    if (!orsRes.ok) {
-      const err = await orsRes.text();
-      return res.status(orsRes.status).json({ error: err });
-    }
-
-    const data = await orsRes.json();
-    res.json(data);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Geocoding proxy
+// Geocoding via Nominatim (no key required)
 app.get('/api/geocode', async (req, res) => {
   try {
-    const q = encodeURIComponent(req.query.q);
-    const apiKey = process.env.ORS_API_KEY || '';
-    const url = `https://api.openrouteservice.org/geocode/search?api_key=${apiKey}&text=${q}&boundary.country=AU&size=5`;
-    const r = await fetch(url);
+    const q = req.query.q || '';
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=6&countrycodes=au`;
+    const r = await fetch(url, {
+      headers: { 'User-Agent': 'WATruckNavigator/1.0 (vibekit.bot)' }
+    });
     const data = await r.json();
     res.json(data);
   } catch (e) {
@@ -71,6 +22,48 @@ app.get('/api/geocode', async (req, res) => {
   }
 });
 
+// Truck routing via Valhalla public instance (no key required)
+app.post('/api/route', async (req, res) => {
+  try {
+    const { start, end, restrictions } = req.body;
+    // Valhalla expects [lon, lat]
+    const body = {
+      locations: [
+        { lon: start[0], lat: start[1] },
+        { lon: end[0],   lat: end[1] }
+      ],
+      costing: 'truck',
+      costing_options: {
+        truck: {
+          width:     restrictions.width     || 2.5,
+          height:    restrictions.height    || 4.3,
+          length:    restrictions.length    || 19.0,
+          weight:    restrictions.weight    || 40.0,
+          axle_load: restrictions.axleload  || 9.5
+        }
+      },
+      directions_options: { units: 'kilometres', language: 'en-AU' }
+    };
+
+    const url = 'https://valhalla.openstreetmap.de/route';
+    const vRes = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    if (!vRes.ok) {
+      const err = await vRes.text();
+      return res.status(vRes.status).json({ error: err });
+    }
+
+    const data = await vRes.json();
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Truck Navigator running on port ${PORT}`);
+  console.log(`WA Truck Navigator running on port ${PORT}`);
 });
