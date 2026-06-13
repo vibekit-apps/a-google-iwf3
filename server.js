@@ -7,6 +7,9 @@ const PORT = process.env.PORT || 4070;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Health check
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
 // Geocoding via Nominatim (no key required)
 app.get('/api/geocode', async (req, res) => {
   try {
