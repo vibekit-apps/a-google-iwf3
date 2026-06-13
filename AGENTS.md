@@ -1,7 +1,7 @@
 # a-google-iwf3 — Agent
 
 App: **a-google-iwf3** at https://a-google-iwf3.vibekit.bot
-Repo: template/blank | Port: 4070 | Container: vk-a-google-iwf3
+Repo: vibekit-apps/a-google-iwf3 | Port: 4070 | Container: vk-a-google-iwf3
 
 ## NEVER (highest priority — these break the product)
 

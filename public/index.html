@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WA Truck Navigator</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; height: 100vh; display: flex; flex-direction: column; }
+
+    #header {
+      background: #16213e;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 2px solid #e94560;
+      flex-shrink: 0;
+    }
+    #header h1 { font-size: 18px; color: #e94560; font-weight: 700; letter-spacing: 1px; }
+    #header span { font-size: 12px; color: #888; }
+
+    #panel {
+      background: #16213e;
+      padding: 12px 16px;
+      flex-shrink: 0;
+      overflow-y: auto;
+      max-height: 55vh;
+    }
+
+    .row { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+    .field { display: flex; flex-direction: column; flex: 1; min-width: 120px; }
+    label { font-size: 11px; color: #aaa; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+    input, select {
+      padding: 8px 10px;
+      background: #0f3460;
+      border: 1px solid #334;
+      border-radius: 6px;
+      color: #eee;
+      font-size: 14px;
+      outline: none;
+    }
+    input:focus, select:focus { border-color: #e94560; }
+
+    .suggestions {
+      position: absolute;
+      background: #0f3460;
+      border: 1px solid #334;
+      border-radius: 6px;
+      z-index: 2000;
+      max-height: 180px;
+      overflow-y: auto;
+      width: 100%;
+    }
+    .suggestions div {
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 13px;
+      border-bottom: 1px solid #223;
+    }
+    .suggestions div:hover { background: #e94560; }
+    .input-wrap { position: relative; flex: 1; }
+
+    #route-btn {
+      width: 100%;
+      padding: 12px;
+      background: #e94560;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: 0.5px;
+      margin-top: 4px;
+    }
+    #route-btn:active { background: #c73652; }
+    #route-btn:disabled { background: #555; cursor: not-allowed; }
+
+    #info-bar {
+      background: #0f3460;
+      padding: 8px 16px;
+      font-size: 13px;
+      color: #ccc;
+      min-height: 32px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    #info-bar .stat { color: #e94560; font-weight: 700; }
+
+    #map { flex: 1; min-height: 200px; }
+
+    .section-title {
+      font-size: 12px;
+      color: #e94560;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+      margin-top: 4px;
+    }
+
+    .restriction-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .vehicle-preset {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .preset-btn {
+      padding: 5px 10px;
+      background: #0f3460;
+      border: 1px solid #334;
+      border-radius: 20px;
+      color: #ccc;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .preset-btn.active { background: #e94560; border-color: #e94560; color: #fff; }
+
+    #steps-panel {
+      display: none;
+      background: #0f3460;
+      padding: 10px 16px;
+      flex-shrink: 0;
+      max-height: 30vh;
+      overflow-y: auto;
+    }
+    #steps-panel h3 { font-size: 13px; color: #e94560; margin-bottom: 8px; }
+    .step { font-size: 12px; padding: 4px 0; border-bottom: 1px solid #223; color: #ccc; }
+    .step span { color: #fff; font-weight: 600; }
+
+    #no-key-msg {
+      background: #3d1a00;
+      border: 1px solid #e94560;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: #ffaa88;
+      margin-bottom: 8px;
+      display: none;
+    }
+    #no-key-msg a { color: #e94560; }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <h1>WA TRUCK NAVIGATOR</h1>
+  <span>Heavy Vehicle Routing</span>
+</div>
+
+<div id="panel">
+
+  <div id="no-key-msg">
+    No ORS API key set. Routes won't load. <a href="https://openrouteservice.org/dev/#/signup" target="_blank">Get a free key</a>, then set <code>ORS_API_KEY</code> in your env.
+  </div>
+
+  <div class="section-title">Vehicle Preset</div>
+  <div class="vehicle-preset">
+    <button class="preset-btn" onclick="setPreset('rigid')">Rigid Truck</button>
+    <button class="preset-btn active" onclick="setPreset('semi')">Semi-Trailer</button>
+    <button class="preset-btn" onclick="setPreset('roadtrain_ab')">Road Train (AB)</button>
+    <button class="preset-btn" onclick="setPreset('roadtrain_b')">B-Double</button>
+    <button class="preset-btn" onclick="setPreset('oversize')">Oversize</button>
+  </div>
+
+  <div class="section-title">Route</div>
+  <div class="row">
+    <div class="field">
+      <label>From</label>
+      <div class="input-wrap">
+        <input id="from-input" type="text" placeholder="Start location..." autocomplete="off" />
+        <div id="from-suggestions" class="suggestions" style="display:none"></div>
+      </div>
+    </div>
+    <div class="field">
+      <label>To</label>
+      <div class="input-wrap">
+        <input id="to-input" type="text" placeholder="Destination..." autocomplete="off" />
+        <div id="to-suggestions" class="suggestions" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">Vehicle Dimensions</div>
+  <div class="restriction-grid">
+    <div class="field">
+      <label>Width (m)</label>
+      <input id="width" type="number" step="0.1" value="2.5" min="1" max="7" />
+    </div>
+    <div class="field">
+      <label>Height (m)</label>
+      <input id="height" type="number" step="0.1" value="4.3" min="1" max="8" />
+    </div>
+    <div class="field">
+      <label>Length (m)</label>
+      <input id="length" type="number" step="0.5" value="19.0" min="5" max="60" />
+    </div>
+    <div class="field">
+      <label>Total Weight (t)</label>
+      <input id="weight" type="number" step="0.5" value="40.0" min="1" max="200" />
+    </div>
+    <div class="field">
+      <label>Axle Load (t)</label>
+      <input id="axleload" type="number" step="0.5" value="9.5" min="1" max="18" />
+    </div>
+    <div class="field">
+      <label>Route Type</label>
+      <select id="route-type">
+        <option value="standard">Standard HGV</option>
+        <option value="overheight">WA Over-Height (Western Power)</option>
+        <option value="roadtrain">Road Train Approved</option>
+      </select>
+    </div>
+  </div>
+
+  <button id="route-btn" onclick="getRoute()">Find Route</button>
+</div>
+
+<div id="info-bar">
+  <span id="route-info">Enter origin and destination above</span>
+</div>
+
+<div id="map"></div>
+
+<div id="steps-panel">
+  <h3>Turn-by-Turn Directions</h3>
+  <div id="steps-list"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ---- Map init ----
+const map = L.map('map').setView([-25.5, 122.0], 6);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '© OpenStreetMap contributors'
+}).addTo(map);
+
+// Add a dark tile option overlay label
+L.tileLayer('https://stamen-tiles-{s}.a.ssl.fastly.net/toner-labels/{z}/{x}/{y}{r}.png', {
+  opacity: 0.3,
+  maxZoom: 19,
+  attribution: 'Stamen'
+}).addTo(map);
+
+let routeLayer = null;
+let fromMarker = null;
+let toMarker = null;
+let fromCoords = null;
+let toCoords = null;
+
+const truckIcon = (color) => L.divIcon({
+  className: '',
+  html: `<div style="width:14px;height:14px;background:${color};border-radius:50%;border:2px solid #fff;box-shadow:0 0 6px rgba(0,0,0,.5)"></div>`,
+  iconSize: [14,14],
+  iconAnchor: [7,7]
+});
+
+// ---- Presets ----
+const PRESETS = {
+  rigid:       { width:2.5, height:4.0, length:8.0,  weight:20.0, axleload:9.5 },
+  semi:        { width:2.5, height:4.3, length:19.0, weight:42.5, axleload:9.5 },
+  roadtrain_ab:{ width:2.5, height:4.3, length:36.5, weight:90.0, axleload:9.5 },
+  roadtrain_b: { width:2.5, height:4.3, length:25.0, weight:62.5, axleload:9.5 },
+  oversize:    { width:3.5, height:5.5, length:30.0, weight:120.0, axleload:12.0 }
+};
+
+function setPreset(key) {
+  const p = PRESETS[key];
+  document.getElementById('width').value = p.width;
+  document.getElementById('height').value = p.height;
+  document.getElementById('length').value = p.length;
+  document.getElementById('weight').value = p.weight;
+  document.getElementById('axleload').value = p.axleload;
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  if (key === 'oversize') document.getElementById('route-type').value = 'overheight';
+  else if (key.startsWith('roadtrain')) document.getElementById('route-type').value = 'roadtrain';
+  else document.getElementById('route-type').value = 'standard';
+}
+
+// ---- Geocode ----
+let geocodeTimer = {};
+function setupGeocode(inputId, sugId, coordSetter) {
+  const input = document.getElementById(inputId);
+  const sug = document.getElementById(sugId);
+  input.addEventListener('input', () => {
+    clearTimeout(geocodeTimer[inputId]);
+    const q = input.value.trim();
+    if (q.length < 3) { sug.style.display = 'none'; return; }
+    geocodeTimer[inputId] = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/geocode?q=${encodeURIComponent(q + ' Western Australia')}`);
+        const data = await r.json();
+        const features = data.features || [];
+        if (!features.length) { sug.style.display = 'none'; return; }
+        sug.innerHTML = '';
+        features.slice(0,5).forEach(f => {
+          const d = document.createElement('div');
+          d.textContent = f.properties.label;
+          d.onclick = () => {
+            input.value = f.properties.label;
+            coordSetter([f.geometry.coordinates[0], f.geometry.coordinates[1]]);
+            sug.style.display = 'none';
+            // Place marker
+            const latlng = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
+            if (inputId === 'from-input') {
+              if (fromMarker) map.removeLayer(fromMarker);
+              fromMarker = L.marker(latlng, {icon: truckIcon('#00d4aa')}).addTo(map).bindPopup('Start').openPopup();
+            } else {
+              if (toMarker) map.removeLayer(toMarker);
+              toMarker = L.marker(latlng, {icon: truckIcon('#e94560')}).addTo(map).bindPopup('Destination').openPopup();
+            }
+            map.setView(latlng, 10);
+          };
+          sug.appendChild(d);
+        });
+        sug.style.display = 'block';
+      } catch(e) { sug.style.display = 'none'; }
+    }, 400);
+  });
+  document.addEventListener('click', e => {
+    if (!sug.contains(e.target) && e.target !== input) sug.style.display = 'none';
+  });
+}
+
+setupGeocode('from-input', 'from-suggestions', c => fromCoords = c);
+setupGeocode('to-input', 'to-suggestions', c => toCoords = c);
+
+// ---- Routing ----
+async function getRoute() {
+  if (!fromCoords || !toCoords) {
+    setInfo('Select both start and destination from the suggestions.');
+    return;
+  }
+  const btn = document.getElementById('route-btn');
+  btn.disabled = true;
+  btn.textContent = 'Routing...';
+  setInfo('Calculating heavy vehicle route...');
+
+  const restrictions = {
+    width:    parseFloat(document.getElementById('width').value),
+    height:   parseFloat(document.getElementById('height').value),
+    length:   parseFloat(document.getElementById('length').value),
+    weight:   parseFloat(document.getElementById('weight').value),
+    axleload: parseFloat(document.getElementById('axleload').value)
+  };
+
+  try {
+    const res = await fetch('/api/route', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ start: fromCoords, end: toCoords, restrictions })
+    });
+    const data = await res.json();
+
+    if (data.error || !data.features || !data.features.length) {
+      setInfo('No route found. The vehicle dimensions may exceed road limits on this corridor, or the ORS API key may not be set.');
+      btn.disabled = false; btn.textContent = 'Find Route'; return;
+    }
+
+    const feature = data.features[0];
+    const summary = feature.properties.summary;
+    const dist = (summary.distance / 1000).toFixed(1);
+    const dur = formatDuration(summary.duration);
+
+    if (routeLayer) map.removeLayer(routeLayer);
+    routeLayer = L.geoJSON(feature, {
+      style: { color: '#e94560', weight: 5, opacity: 0.85 },
+      onEachFeature: (f, layer) => {
+        layer.bindPopup(`${dist} km — ${dur}`);
+      }
+    }).addTo(map);
+
+    const bounds = routeLayer.getBounds();
+    map.fitBounds(bounds, {padding:[30,30]});
+
+    const routeType = document.getElementById('route-type').value;
+    const routeLabel = routeType === 'overheight' ? 'Over-Height (Western Power)' :
+                       routeType === 'roadtrain'  ? 'Road Train Approved' : 'Standard HGV';
+    setInfo(`<span class="stat">${dist} km</span> &nbsp; <span class="stat">${dur}</span> &nbsp; Route: ${routeLabel} &nbsp; ${restrictions.width}m W / ${restrictions.height}m H / ${restrictions.length}m L / ${restrictions.weight}t`);
+
+    // Turn-by-turn steps
+    const steps = feature.properties.segments?.[0]?.steps || [];
+    if (steps.length) {
+      const panel = document.getElementById('steps-panel');
+      const list = document.getElementById('steps-list');
+      list.innerHTML = steps.map(s =>
+        `<div class="step"><span>${s.instruction}</span> — ${(s.distance/1000).toFixed(2)} km</div>`
+      ).join('');
+      panel.style.display = 'block';
+    }
+
+  } catch(e) {
+    setInfo('Error: ' + e.message);
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Find Route';
+}
+
+function setInfo(html) {
+  document.getElementById('route-info').innerHTML = html;
+}
+
+function formatDuration(seconds) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m} min`;
+}
+
+// Check API key
+(async () => {
+  try {
+    const r = await fetch('/api/geocode?q=Perth');
+    const d = await r.json();
+    if (d.error || !d.features) {
+      document.getElementById('no-key-msg').style.display = 'block';
+    }
+  } catch(e) {}
+})();
+</script>
+</body>
+</html>
