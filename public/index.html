@@ -351,16 +351,10 @@
     <h2>WA TRUCK NAVIGATOR</h2>
     <p class="sub">Heavy Vehicle Routing for Western Australia</p>
 
-    <div class="trial-badge">
-      <strong>1 Month Free Trial</strong><br>
-      Full access — no credit card needed to start.<br>
-      After 30 days it's <strong>$10/month</strong>.
-    </div>
-
     <input type="email" id="gate-email" placeholder="Enter your email to start" autocomplete="email" />
-    <button class="btn-primary" id="gate-btn" onclick="startAccess()">Start Free Trial</button>
+    <button class="btn-primary" id="gate-btn" onclick="startAccess()">Get Started</button>
 
-    <p class="terms">By continuing you agree to our terms. We'll email you before your trial ends.</p>
+    <p class="terms">By continuing you agree to our terms.</p>
   </div>
 </div>
 
@@ -505,7 +499,7 @@ async function startAccess() {
     alert('Error: ' + e.message);
   }
   btn.disabled = false;
-  btn.textContent = 'Start Free Trial';
+  btn.textContent = 'Get Started';
 }
 
 async function checkExistingSession() {
