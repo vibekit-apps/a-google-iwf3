@@ -267,6 +267,80 @@
     #steps-panel h3 { font-size: 13px; color: #e94560; margin-bottom: 6px; }
     .step { font-size: 12px; padding: 4px 0; border-bottom: 1px solid #1a2a4a; color: #ccc; }
     .step span { color: #fff; }
+
+    /* ---- Live Navigation HUD ---- */
+    #nav-hud {
+      display: none;
+      background: #0f3460;
+      border-bottom: 3px solid #e94560;
+      padding: 10px 14px;
+      flex-shrink: 0;
+      align-items: center;
+      gap: 12px;
+      min-height: 72px;
+    }
+    #nav-hud.active { display: flex; }
+    #nav-arrow {
+      font-size: 38px;
+      line-height: 1;
+      min-width: 44px;
+      text-align: center;
+      color: #e94560;
+    }
+    #nav-text { flex: 1; overflow: hidden; }
+    #nav-instruction {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #nav-street {
+      font-size: 12px;
+      color: #aaa;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+    #nav-dist {
+      font-size: 22px;
+      font-weight: 700;
+      color: #e94560;
+      min-width: 64px;
+      text-align: right;
+    }
+    #stop-nav-btn {
+      padding: 8px 12px;
+      background: #e94560;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    #start-nav-btn {
+      display: none;
+      padding: 8px 14px;
+      background: #00d4aa;
+      color: #0f3460;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    #gps-dot {
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      background: #00d4aa;
+      border: 3px solid #fff;
+      box-shadow: 0 0 0 4px rgba(0,212,170,.35);
+    }
   </style>
 </head>
 <body>
@@ -299,6 +373,17 @@
     <button class="btn-subscribe" id="sub-btn" onclick="goSubscribe()">Subscribe Now</button>
     <div style="font-size:12px;color:#555;">Secure payment via Stripe. Cancel any time.</div>
   </div>
+</div>
+
+<!-- ===================== NAV HUD ===================== -->
+<div id="nav-hud">
+  <div id="nav-arrow">↑</div>
+  <div id="nav-text">
+    <div id="nav-instruction">Preparing navigation…</div>
+    <div id="nav-street"></div>
+  </div>
+  <div id="nav-dist"></div>
+  <button id="stop-nav-btn" onclick="stopNavigation()">Stop</button>
 </div>
 
 <!-- ===================== APP ===================== -->
@@ -377,6 +462,7 @@
 
 <div id="info-bar">
   <span id="route-info">Enter origin and destination above</span>
+  <button id="start-nav-btn" onclick="startNavigation()">Navigate</button>
 </div>
 
 <div id="map"></div>
@@ -513,6 +599,14 @@ checkExistingSession().then(() => {
 });
 
 // ===================== APP =====================
+
+// Navigation state
+let isNavigating  = false;
+let navWatchId    = null;
+let navStepIndex  = 0;
+let navSteps      = [];   // [{arrow, instruction, street, coords:[lat,lon]}]
+let userMarker    = null;
+let routeStepsRaw = [];   // raw OSRM steps
 
 const map = L.map('map', { zoomControl: true }).setView([-25.5, 122.0], 5);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -661,6 +755,8 @@ async function getRoute() {
     setInfo(`<span class="stat">${dist} km</span> &nbsp; <span class="stat">${dur}</span> &nbsp; ${routeLabel} | ${restrictions.width}m W / ${restrictions.height}m H / ${restrictions.length}m L / ${restrictions.weight}t`);
 
     const steps = (route.legs[0] && route.legs[0].steps) || [];
+    routeStepsRaw = steps;
+    buildNavSteps(steps);
     if (steps.length) {
       const list = document.getElementById('steps-list');
       list.innerHTML = steps.map(s => {
@@ -670,6 +766,7 @@ async function getRoute() {
         return `<div class="step">${type}: <span>${name}</span> — ${km} km</div>`;
       }).join('');
       document.getElementById('steps-panel').style.display = 'block';
+      document.getElementById('start-nav-btn').style.display = 'inline-block';
     }
 
   } catch(e) {
@@ -687,6 +784,173 @@ function setInfo(html) {
 function formatDuration(s) {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
   return h > 0 ? `${h}h ${m}m` : `${m} min`;
+}
+
+// ===================== NAVIGATION =====================
+
+const MANEUVER_ARROW = {
+  'depart':            '▶',
+  'arrive':            '◉',
+  'straight':          '↑',
+  'continue':          '↑',
+  'slight right':      '↗',
+  'slight left':       '↖',
+  'right':             '→',
+  'left':              '←',
+  'sharp right':       '↱',
+  'sharp left':        '↲',
+  'roundabout':        '↻',
+  'rotary':            '↻',
+  'roundabout turn':   '↻',
+  'merge':             '↑',
+  'fork':              '⑂',
+  'end of road right': '→',
+  'end of road left':  '←',
+  'default':           '↑'
+};
+
+function maneuverArrow(m) {
+  if (!m) return '↑';
+  const key = m.modifier ? m.modifier : m.type;
+  return MANEUVER_ARROW[key] || MANEUVER_ARROW[m.type] || '↑';
+}
+
+function maneuverLabel(m) {
+  if (!m) return 'Continue';
+  const labels = {
+    depart: 'Depart', arrive: 'Arrive', turn: 'Turn',
+    'new name': 'Continue', merge: 'Merge', 'on ramp': 'On ramp',
+    'off ramp': 'Off ramp', fork: 'Fork', 'end of road': 'End of road',
+    straight: 'Continue straight', roundabout: 'Enter roundabout',
+    rotary: 'Enter roundabout', 'roundabout turn': 'Roundabout', continue: 'Continue'
+  };
+  const base = labels[m.type] || m.type || 'Continue';
+  if (m.modifier && !['straight','uturn'].includes(m.modifier))
+    return base + ' ' + m.modifier;
+  return base;
+}
+
+function buildNavSteps(steps) {
+  navSteps = steps.map(s => ({
+    arrow:       maneuverArrow(s.maneuver),
+    instruction: maneuverLabel(s.maneuver),
+    street:      s.name || '',
+    coords:      s.maneuver && s.maneuver.location
+                   ? [s.maneuver.location[1], s.maneuver.location[0]]
+                   : null,
+    distance:    s.distance
+  }));
+}
+
+function haversineM(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 +
+            Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function userIcon() {
+  return L.divIcon({
+    className: '',
+    html: '<div id="gps-dot"></div>',
+    iconSize: [18,18], iconAnchor: [9,9]
+  });
+}
+
+function updateNavHUD(userLat, userLon) {
+  if (!navSteps.length) return;
+  const step = navSteps[navStepIndex] || navSteps[navSteps.length - 1];
+  document.getElementById('nav-arrow').textContent      = step.arrow;
+  document.getElementById('nav-instruction').textContent = step.instruction;
+  document.getElementById('nav-street').textContent      = step.street || '';
+
+  // Distance to the NEXT step's start point
+  const next = navSteps[navStepIndex + 1];
+  if (userLat != null && next && next.coords) {
+    const d = haversineM(userLat, userLon, next.coords[0], next.coords[1]);
+    document.getElementById('nav-dist').textContent = d < 1000
+      ? Math.round(d) + 'm'
+      : (d / 1000).toFixed(1) + 'km';
+  } else {
+    document.getElementById('nav-dist').textContent = '';
+  }
+}
+
+function startNavigation() {
+  if (!navSteps.length) { setInfo('Calculate a route first.'); return; }
+  if (!navigator.geolocation) { setInfo('GPS not available on this device.'); return; }
+
+  isNavigating = true;
+  navStepIndex = 0;
+
+  document.getElementById('panel').style.display          = 'none';
+  document.getElementById('steps-panel').style.display    = 'none';
+  document.getElementById('info-bar').style.display       = 'none';
+  document.getElementById('nav-hud').classList.add('active');
+
+  updateNavHUD();
+
+  navWatchId = navigator.geolocation.watchPosition(
+    pos => {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      const latlng = [lat, lon];
+
+      if (!userMarker) {
+        userMarker = L.marker(latlng, { icon: userIcon(), zIndexOffset: 1000 }).addTo(map);
+      } else {
+        userMarker.setLatLng(latlng);
+      }
+
+      map.setView(latlng, 15, { animate: true, duration: 0.5 });
+
+      // Advance steps when within 60m of next maneuver
+      while (navStepIndex < navSteps.length - 1) {
+        const next = navSteps[navStepIndex + 1];
+        if (next.coords) {
+          const d = haversineM(lat, lon, next.coords[0], next.coords[1]);
+          if (d < 60) { navStepIndex++; continue; }
+        }
+        break;
+      }
+
+      updateNavHUD(lat, lon);
+
+      // Arrived
+      if (navStepIndex === navSteps.length - 1 &&
+          navSteps[navStepIndex].instruction.toLowerCase().includes('arrive')) {
+        document.getElementById('nav-instruction').textContent = 'You have arrived';
+        document.getElementById('nav-dist').textContent = '';
+      }
+    },
+    err => {
+      const msg = err.code === 1 ? 'GPS permission denied'
+                : err.code === 2 ? 'GPS signal unavailable'
+                : 'GPS timeout';
+      document.getElementById('nav-instruction').textContent = msg;
+    },
+    { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 }
+  );
+}
+
+function stopNavigation() {
+  if (navWatchId !== null) {
+    navigator.geolocation.clearWatch(navWatchId);
+    navWatchId = null;
+  }
+  isNavigating = false;
+
+  document.getElementById('nav-hud').classList.remove('active');
+  document.getElementById('panel').style.display       = 'block';
+  document.getElementById('info-bar').style.display    = 'flex';
+  if (routeStepsRaw.length)
+    document.getElementById('steps-panel').style.display = 'block';
+
+  if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
+
+  if (routeLayer) map.fitBounds(routeLayer.getBounds(), { padding: [30,30] });
 }
 </script>
 </body>
