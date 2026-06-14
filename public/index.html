@@ -9,6 +9,118 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; height: 100dvh; display: flex; flex-direction: column; }
 
+    /* ---- Auth Gate ---- */
+    #auth-gate {
+      position: fixed; inset: 0; background: #1a1a2e;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 9999; padding: 24px;
+    }
+    #auth-gate.hidden { display: none; }
+
+    .auth-card {
+      background: #16213e;
+      border: 1px solid #334;
+      border-radius: 14px;
+      padding: 32px 28px;
+      max-width: 380px;
+      width: 100%;
+      text-align: center;
+    }
+    .auth-card h2 { color: #e94560; font-size: 22px; letter-spacing: 1px; margin-bottom: 6px; }
+    .auth-card .sub { color: #888; font-size: 13px; margin-bottom: 24px; line-height: 1.5; }
+
+    .trial-badge {
+      background: #0f3460;
+      border: 1px solid #e94560;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      color: #ccc;
+      line-height: 1.5;
+    }
+    .trial-badge strong { color: #e94560; }
+
+    .auth-card input[type=email] {
+      width: 100%;
+      padding: 12px 14px;
+      background: #0f3460;
+      border: 1px solid #334;
+      border-radius: 8px;
+      color: #eee;
+      font-size: 15px;
+      outline: none;
+      margin-bottom: 14px;
+    }
+    .auth-card input[type=email]:focus { border-color: #e94560; }
+
+    .btn-primary {
+      width: 100%;
+      padding: 13px;
+      background: #e94560;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: 0.5px;
+    }
+    .btn-primary:active { background: #c73652; }
+    .btn-primary:disabled { background: #555; cursor: not-allowed; }
+
+    .auth-card .terms { font-size: 11px; color: #555; margin-top: 14px; line-height: 1.5; }
+
+    /* ---- Trial expired state ---- */
+    #expired-screen {
+      position: fixed; inset: 0; background: #1a1a2e;
+      display: none; align-items: center; justify-content: center;
+      z-index: 9999; padding: 24px;
+    }
+    #expired-screen.show { display: flex; }
+
+    .expired-card {
+      background: #16213e;
+      border: 1px solid #e94560;
+      border-radius: 14px;
+      padding: 32px 28px;
+      max-width: 380px;
+      width: 100%;
+      text-align: center;
+    }
+    .expired-card h2 { color: #e94560; font-size: 20px; margin-bottom: 10px; }
+    .expired-card p { color: #aaa; font-size: 13px; line-height: 1.5; margin-bottom: 20px; }
+    .price-tag { font-size: 32px; color: #fff; font-weight: 700; margin-bottom: 6px; }
+    .price-tag span { font-size: 14px; color: #888; }
+    .btn-subscribe {
+      width: 100%;
+      padding: 14px;
+      background: #e94560;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-bottom: 10px;
+    }
+    .btn-subscribe:disabled { background: #555; cursor: not-allowed; }
+
+    /* ---- Trial banner (inside app) ---- */
+    #trial-banner {
+      background: #0f3460;
+      border-bottom: 1px solid #e94560;
+      padding: 6px 14px;
+      font-size: 12px;
+      color: #ccc;
+      flex-shrink: 0;
+      display: none;
+      text-align: center;
+    }
+    #trial-banner.show { display: block; }
+    #trial-banner a { color: #e94560; cursor: pointer; text-decoration: underline; }
+
+    /* ---- App (same as before) ---- */
     #header {
       background: #16213e;
       padding: 10px 14px;
@@ -20,6 +132,19 @@
     }
     #header h1 { font-size: 17px; color: #e94560; font-weight: 700; letter-spacing: 1px; }
     #header span { font-size: 11px; color: #888; }
+    #header .user-chip {
+      margin-left: auto;
+      font-size: 11px;
+      color: #666;
+      background: #0f3460;
+      border-radius: 20px;
+      padding: 4px 10px;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 140px;
+    }
 
     #panel {
       background: #16213e;
@@ -146,13 +271,48 @@
 </head>
 <body>
 
+<!-- ===================== AUTH GATE ===================== -->
+<div id="auth-gate">
+  <div class="auth-card">
+    <h2>WA TRUCK NAVIGATOR</h2>
+    <p class="sub">Heavy Vehicle Routing for Western Australia</p>
+
+    <div class="trial-badge">
+      <strong>1 Month Free Trial</strong><br>
+      Full access — no credit card needed to start.<br>
+      After 30 days it's <strong>$10/month</strong>.
+    </div>
+
+    <input type="email" id="gate-email" placeholder="Enter your email to start" autocomplete="email" />
+    <button class="btn-primary" id="gate-btn" onclick="startAccess()">Start Free Trial</button>
+
+    <p class="terms">By continuing you agree to our terms. We'll email you before your trial ends.</p>
+  </div>
+</div>
+
+<!-- ===================== EXPIRED SCREEN ===================== -->
+<div id="expired-screen">
+  <div class="expired-card">
+    <h2>Your free trial has ended</h2>
+    <p>Subscribe to keep using WA Truck Navigator with full route calculations and truck restrictions.</p>
+    <div class="price-tag">$10 <span>/ month</span></div>
+    <button class="btn-subscribe" id="sub-btn" onclick="goSubscribe()">Subscribe Now</button>
+    <div style="font-size:12px;color:#555;">Secure payment via Stripe. Cancel any time.</div>
+  </div>
+</div>
+
+<!-- ===================== APP ===================== -->
+<div id="trial-banner">
+  Trial: <span id="trial-days"></span> days left &nbsp;|&nbsp; <a onclick="goSubscribe()">Subscribe — $10/month</a>
+</div>
+
 <div id="header">
   <h1>WA TRUCK NAVIGATOR</h1>
   <span>Heavy Vehicle Routing</span>
+  <div class="user-chip" id="user-chip" onclick="logout()" title="Tap to log out"></div>
 </div>
 
 <div id="panel">
-
   <div class="section-title">Vehicle Preset</div>
   <div class="vehicle-preset">
     <button class="preset-btn" onclick="setPreset('rigid',this)">Rigid</button>
@@ -228,7 +388,132 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// ---- Map ----
+// ===================== AUTH =====================
+let currentEmail = localStorage.getItem('wtn_email') || '';
+
+async function startAccess() {
+  const email = document.getElementById('gate-email').value.trim();
+  if (!email || !email.includes('@')) {
+    alert('Please enter a valid email address.');
+    return;
+  }
+  const btn = document.getElementById('gate-btn');
+  btn.disabled = true;
+  btn.textContent = 'Checking...';
+
+  try {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    if (data.access && data.access.allowed) {
+      currentEmail = email;
+      localStorage.setItem('wtn_email', email);
+      showApp(data);
+    } else {
+      showExpired();
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+  btn.disabled = false;
+  btn.textContent = 'Start Free Trial';
+}
+
+async function checkExistingSession() {
+  if (!currentEmail) return;
+  try {
+    const res = await fetch('/api/auth/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: currentEmail })
+    });
+    const data = await res.json();
+    if (data.allowed) {
+      showApp(data);
+    } else {
+      showExpired();
+    }
+  } catch(e) {
+    // silent fail — show gate
+  }
+}
+
+function showApp(data) {
+  document.getElementById('auth-gate').classList.add('hidden');
+  document.getElementById('expired-screen').classList.remove('show');
+
+  // Show trial banner if on trial
+  if (data.reason === 'trial' || data.status === 'trial') {
+    const days = data.daysLeft || Math.ceil(((data.trialEnds || 0) - Date.now()) / 86400000);
+    if (days > 0) {
+      document.getElementById('trial-days').textContent = days;
+      document.getElementById('trial-banner').classList.add('show');
+    }
+  }
+
+  const chip = document.getElementById('user-chip');
+  chip.textContent = currentEmail;
+  chip.title = 'Logged in as ' + currentEmail + '\nTap to log out';
+
+  // Handle ?payment=success
+  const params = new URLSearchParams(location.search);
+  if (params.get('payment') === 'success') {
+    document.getElementById('trial-banner').classList.remove('show');
+    setInfo('Subscription active. Welcome back!');
+    history.replaceState({}, '', '/');
+  }
+}
+
+function showExpired() {
+  document.getElementById('auth-gate').classList.add('hidden');
+  document.getElementById('expired-screen').classList.add('show');
+}
+
+async function goSubscribe() {
+  const email = currentEmail || document.getElementById('gate-email')?.value?.trim();
+  if (!email) { alert('Enter your email first.'); return; }
+
+  const btn = document.getElementById('sub-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Redirecting...'; }
+
+  try {
+    const res = await fetch('/api/subscribe/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    if (data.url) {
+      window.location.href = data.url;
+    } else {
+      alert(data.error || 'Could not start checkout.');
+      if (btn) { btn.disabled = false; btn.textContent = 'Subscribe Now'; }
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = 'Subscribe Now'; }
+  }
+}
+
+function logout() {
+  if (!confirm('Log out?')) return;
+  localStorage.removeItem('wtn_email');
+  currentEmail = '';
+  location.reload();
+}
+
+// Boot
+checkExistingSession().then(() => {
+  if (!currentEmail) {
+    // gate is already visible by default
+  }
+});
+
+// ===================== APP =====================
+
 const map = L.map('map', { zoomControl: true }).setView([-25.5, 122.0], 5);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19,
@@ -247,7 +532,6 @@ function pinIcon(color) {
   });
 }
 
-// ---- Presets ----
 const PRESETS = {
   rigid:     { width:2.5,  height:4.0, length:8.0,  weight:20.0, axleload:9.5 },
   semi:      { width:2.5,  height:4.3, length:19.0, weight:42.5, axleload:9.5 },
@@ -265,15 +549,13 @@ function setPreset(key, el) {
   document.getElementById('axleload').value = p.axleload;
   document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
-  if (key === 'oversize')    document.getElementById('route-type').value = 'overheight';
+  if (key === 'oversize')       document.getElementById('route-type').value = 'overheight';
   else if (key === 'roadtrain') document.getElementById('route-type').value = 'roadtrain';
-  else document.getElementById('route-type').value = 'standard';
+  else                          document.getElementById('route-type').value = 'standard';
 }
 
-// ---- Geocode (Nominatim) ----
 let geoTimers = {};
-
-function setupGeocode(inputId, sugId, setter, markerColor) {
+function setupGeocode(inputId, sugId, setter) {
   const inp = document.getElementById(inputId);
   const sug = document.getElementById(sugId);
 
@@ -318,10 +600,8 @@ function setupGeocode(inputId, sugId, setter, markerColor) {
   });
 }
 
-setupGeocode('from-input', 'from-suggestions', c => fromCoords = c, '#00d4aa');
-setupGeocode('to-input',   'to-suggestions',   c => toCoords = c,   '#e94560');
-
-// ---- Routing ----
+setupGeocode('from-input', 'from-suggestions', c => fromCoords = c);
+setupGeocode('to-input',   'to-suggestions',   c => toCoords = c);
 
 async function getRoute() {
   if (!fromCoords || !toCoords) {
@@ -345,27 +625,32 @@ async function getRoute() {
     const res = await fetch('/api/route', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ start: fromCoords, end: toCoords, restrictions })
+      body: JSON.stringify({ start: fromCoords, end: toCoords, email: currentEmail, restrictions })
     });
-    const data = await res.json();
 
-    if (data.error || data.code !== 'Ok' || !data.routes || !data.routes.length) {
-      const msg = data.error || 'No route found.';
-      setInfo('No route found: ' + msg);
+    if (res.status === 403) {
+      const err = await res.json();
+      if (err.reason === 'expired') showExpired();
+      else { document.getElementById('auth-gate').classList.remove('hidden'); }
       btn.disabled = false; btn.textContent = 'Find Route';
       return;
     }
 
-    // OSRM returns GeoJSON geometry: coordinates are [lon, lat]
+    const data = await res.json();
+    if (data.error || data.code !== 'Ok' || !data.routes || !data.routes.length) {
+      setInfo('No route found: ' + (data.error || 'Unknown error'));
+      btn.disabled = false; btn.textContent = 'Find Route';
+      return;
+    }
+
     const route = data.routes[0];
-    const coords = route.geometry.coordinates.map(c => [c[1], c[0]]); // flip to [lat, lon] for Leaflet
+    const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
     if (routeLayer) map.removeLayer(routeLayer);
     routeLayer = L.polyline(coords, { color: '#e94560', weight: 5, opacity: 0.85 }).addTo(map);
     map.fitBounds(routeLayer.getBounds(), { padding: [30,30] });
 
     const dist = (route.distance / 1000).toFixed(1);
     const dur  = formatDuration(route.duration);
-
     const routeType = document.getElementById('route-type').value;
     const routeLabel = {
       standard: 'Standard HGV',
@@ -375,7 +660,6 @@ async function getRoute() {
 
     setInfo(`<span class="stat">${dist} km</span> &nbsp; <span class="stat">${dur}</span> &nbsp; ${routeLabel} | ${restrictions.width}m W / ${restrictions.height}m H / ${restrictions.length}m L / ${restrictions.weight}t`);
 
-    // Steps — OSRM format
     const steps = (route.legs[0] && route.legs[0].steps) || [];
     if (steps.length) {
       const list = document.getElementById('steps-list');
@@ -404,8 +688,6 @@ function formatDuration(s) {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
   return h > 0 ? `${h}h ${m}m` : `${m} min`;
 }
-
-
 </script>
 </body>
 </html>
